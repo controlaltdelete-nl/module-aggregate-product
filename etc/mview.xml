@@ -1,11 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-/**
- * Copyright © Nfourteen. All Rights Reserved.
- * See COPYING.txt for license details.
- **/
--->
-<!--
     Relations writes (add/remove child, qty change) go through RelationMetadata without
     saving the parent entity, so no core-subscribed table marks the parent dirty. These
     subscriptions cover scheduled mode; RelationReindexer::reindex() covers on-save.

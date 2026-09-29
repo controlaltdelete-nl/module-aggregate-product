@@ -7,9 +7,13 @@
     "magento/framework": "*",
     "magento/module-catalog": "104.0.*"
   },
-  "license": [
-    "Proprietary"
+  "authors": [
+    {
+      "name": "David Nimorwicz",
+      "email": "dave@nfourteen.com"
+    }
   ],
+  "license": "OSL-3.0",
   "autoload": {
     "files": [
       "registration.php"
