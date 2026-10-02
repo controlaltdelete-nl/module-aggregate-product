@@ -260,7 +260,7 @@ class Aggregate extends AbstractType implements ResetAfterRequestInterface
                     $processMode
                 );
 
-                if (!isset($_result[0])) {
+                if (!is_array($_result) || !isset($_result[0])) {
                     return $this->getItemErrorMessage()->render();
                 }
 
