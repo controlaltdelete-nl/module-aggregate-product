@@ -9,22 +9,53 @@ jobs:
   # PHP 8.4 deprecated implicit nullable parameters, and setup:upgrade runs before the switch to
   # production mode, so on 8.4 and later the install itself fails on the module's constructors.
   # Every job runs PHP 8.3 until those use explicit nullable types; add 8.4/8.5 back after that.
+  #
+  # The aggregate product behaves differently depending on what is installed next to it, so each
+  # job runs one of three configurations:
+  #   full         this module plus module-inventory-aggregate-product, on MSI. The intended setup.
+  #   core-msi     this module alone on MSI. Composer allows it, and MSI then treats the pack as an
+  #                ordinary product with its own stock.
+  #   core-legacy  this module alone with every MSI module disabled, so only the legacy
+  #                CatalogInventory stock is in play.
   e2e-tests:
-    name: E2E (${{ matrix.PLATFORM }}, ${{ matrix.PHP_VERSION }}, ${{ matrix.MAGENTO_MODE }})
+    name: E2E (${{ matrix.CONFIGURATION }}, ${{ matrix.PLATFORM }}, ${{ matrix.PHP_VERSION }}, ${{ matrix.MAGENTO_MODE }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - PLATFORM: magento2.4.9
+          - CONFIGURATION: full
+            PLATFORM: magento2.4.9
             IMAGE: magento-project-community-edition
             PHP_VERSION: php83-fpm
             MAGENTO_MODE: production
-          - PLATFORM: mage-os3.4.0
+          - CONFIGURATION: full
+            PLATFORM: mage-os3.4.0
             IMAGE: mage-os-community-edition
             PHP_VERSION: php83-fpm
             MAGENTO_MODE: developer
-          - PLATFORM: mage-os3.4.0
+          - CONFIGURATION: full
+            PLATFORM: mage-os3.4.0
+            IMAGE: mage-os-community-edition
+            PHP_VERSION: php83-fpm
+            MAGENTO_MODE: production
+          - CONFIGURATION: core-msi
+            PLATFORM: magento2.4.9
+            IMAGE: magento-project-community-edition
+            PHP_VERSION: php83-fpm
+            MAGENTO_MODE: production
+          - CONFIGURATION: core-msi
+            PLATFORM: mage-os3.4.0
+            IMAGE: mage-os-community-edition
+            PHP_VERSION: php83-fpm
+            MAGENTO_MODE: production
+          - CONFIGURATION: core-legacy
+            PLATFORM: magento2.4.9
+            IMAGE: magento-project-community-edition
+            PHP_VERSION: php83-fpm
+            MAGENTO_MODE: production
+          - CONFIGURATION: core-legacy
+            PLATFORM: mage-os3.4.0
             IMAGE: mage-os-community-edition
             PHP_VERSION: php83-fpm
             MAGENTO_MODE: production
@@ -39,9 +70,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # The inventory module is what makes MSI treat the aggregate's children as the stock that
-      # matters. The image runs MSI, so the flow is only realistic with both installed.
       - uses: actions/checkout@v7
+        if: matrix.CONFIGURATION == 'full'
         with:
           repository: nfourteen/module-inventory-aggregate-product
           path: inventory-module
@@ -56,17 +86,33 @@ jobs:
 
       - name: Upload the modules into the container
         run: |
-          sed -i '/version/d' ./composer.json ./inventory-module/composer.json
-          docker cp ./inventory-module store:/data/extensions/module-inventory-aggregate-product
-          rm -rf ./inventory-module
+          packages="nfourteen/module-aggregate-product:@dev"
+          if [ -d ./inventory-module ]; then
+            sed -i '/version/d' ./inventory-module/composer.json
+            docker cp ./inventory-module store:/data/extensions/module-inventory-aggregate-product
+            rm -rf ./inventory-module
+            packages="$packages nfourteen/module-inventory-aggregate-product:@dev"
+          fi
+          sed -i '/version/d' ./composer.json
           docker cp $(pwd) store:/data/extensions/
-          docker exec store ./install-composer-package \
-            nfourteen/module-aggregate-product:@dev \
-            nfourteen/module-inventory-aggregate-product:@dev
+          docker exec store ./install-composer-package $packages
+
+      # Disabling a module and running setup:upgrade drops its tables, which is why this only ever
+      # happens in this throwaway container.
+      - name: Disable MSI
+        if: matrix.CONFIGURATION == 'core-legacy'
+        run: |
+          docker exec store /bin/bash -c '
+            bin/magento module:disable $(bin/magento module:status --enabled | grep -E "^(Magento_Inventory|MageOS_Inventory)")
+          '
 
       - name: Enable the modules
         run: |
-          docker exec store ./retry "php bin/magento module:enable Nfourteen_AggregateProduct Nfourteen_InventoryAggregateProduct"
+          modules="Nfourteen_AggregateProduct"
+          if [ "${{ matrix.CONFIGURATION }}" = "full" ]; then
+            modules="$modules Nfourteen_InventoryAggregateProduct"
+          fi
+          docker exec store ./retry "php bin/magento module:enable $modules"
           docker exec store ./retry "php bin/magento setup:upgrade --no-interaction --keep-generated"
 
       - name: Prepare Magento
@@ -75,6 +121,9 @@ jobs:
           docker exec store ./retry "bin/magento config:set admin/security/session_lifetime 14400"
           docker exec store ./retry "bin/magento config:set admin/security/admin_account_sharing 1"
           docker exec store ./retry "bin/magento config:set admin/usage/enabled 0"
+          # "Update by Schedule" is the recommended production setting, and some specs reproduce
+          # what happens in the window before cron catches up, which only exists in that mode.
+          docker exec store ./retry "bin/magento indexer:set-mode schedule"
           docker exec store ./retry "bin/magento admin:user:create \
             --admin-user=${{ env.ADMIN_USER }} \
             --admin-password=${{ env.ADMIN_PASSWORD }} \
@@ -120,7 +169,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: e2e-${{ matrix.PLATFORM }}-${{ matrix.PHP_VERSION }}-${{ matrix.MAGENTO_MODE }}
+          name: e2e-${{ matrix.CONFIGURATION }}-${{ matrix.PLATFORM }}-${{ matrix.PHP_VERSION }}-${{ matrix.MAGENTO_MODE }}
           path: |
             tests/End-2-End/test-results
             tests/End-2-End/playwright-report
