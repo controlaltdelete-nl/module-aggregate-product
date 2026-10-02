@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page, type Response } from '@playwright/test';
 
 export interface GuestAddress {
     email: string;
@@ -27,6 +27,38 @@ export class LumaStorefront {
         await this.page.locator('#product_addtocart_form #qty').fill(qty.toString());
         await this.page.locator('#product-addtocart-button').click();
         await expect(this.page.locator('.message-success')).toContainText('You added', { timeout: 30_000 });
+    }
+
+    /**
+     * Clicks Add to Cart and hands back the add request's response without assuming it succeeded,
+     * for specs about what happens when it should not.
+     */
+    async submitAddToCart(qty: number): Promise<Response> {
+        await this.page.locator('#product_addtocart_form #qty').fill(qty.toString());
+        const response = this.page.waitForResponse((candidate) => candidate.url().includes('/checkout/cart/add'));
+        await this.page.locator('#product-addtocart-button').click();
+
+        return response;
+    }
+
+    addToCartButton(): Locator {
+        return this.page.locator('#product-addtocart-button');
+    }
+
+    /**
+     * The page's flash messages. Magento shows a product that cannot be added as a notice, not an
+     * error, so this does not filter on the message type.
+     */
+    pageMessages(): Locator {
+        return this.page.locator('.page.messages .message');
+    }
+
+    async openCartPage(cartUrl: string): Promise<void> {
+        await this.page.goto(cartUrl, { waitUntil: 'networkidle' });
+    }
+
+    cartIsEmpty(): Locator {
+        return this.page.locator('.cart-empty');
     }
 
     async openCart(): Promise<void> {
