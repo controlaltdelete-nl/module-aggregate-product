@@ -2,8 +2,8 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import { openAdminDashboard } from './AdminDashboard';
 
 /**
- * The admin order view, opened through Sales > Orders and the grid's keyword search, the way a
- * merchant finds an order.
+ * The admin order view and the invoice and credit memo pages reached from it, opened through
+ * Sales > Orders and the grid's keyword search, the way a merchant finds an order.
  */
 export class AdminOrderView {
     constructor(private readonly page: Page) {}
@@ -34,5 +34,27 @@ export class AdminOrderView {
      */
     productRow(sku: string): Locator {
         return this.itemsOrdered().locator('tbody tr', { has: this.page.locator('.product-sku-block', { hasText: sku }) });
+    }
+
+    async invoiceEverything(): Promise<void> {
+        await this.page.locator('#order_invoice').click();
+        await this.page.waitForLoadState('networkidle');
+        await this.page.locator('.order-totals-actions button.submit-button').click();
+        await expect(this.successMessage()).toContainText('The invoice has been created.', { timeout: 60_000 });
+    }
+
+    /**
+     * Opens "Credit Memo" and refunds everything offline with the quantities the form proposes,
+     * which is the only refund a check/money order payment offers.
+     */
+    async refundEverythingOffline(): Promise<void> {
+        await this.page.locator('#order_creditmemo').click();
+        await this.page.waitForLoadState('networkidle');
+        await this.page.getByRole('button', { name: 'Refund Offline' }).click();
+        await expect(this.successMessage()).toContainText('You created the credit memo.', { timeout: 60_000 });
+    }
+
+    private successMessage(): Locator {
+        return this.page.locator('#messages .message-success, .page.messages .message-success').first();
     }
 }
