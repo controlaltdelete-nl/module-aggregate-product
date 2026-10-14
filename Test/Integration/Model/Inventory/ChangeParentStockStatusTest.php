@@ -84,6 +84,30 @@ class ChangeParentStockStatusTest extends TestCase
 
     #[
         DbIsolation(true),
+        DataFixture(ProductFixture::class, ['sku' => 'csp-first-child'], as: 'firstChild'),
+        DataFixture(ProductFixture::class, ['sku' => 'csp-second-child'], as: 'secondChild'),
+        DataFixture(AggregateProductFixture::class, [
+            'sku' => 'csp-two-children-parent',
+            '_children' => [
+                ['product_id' => '$firstChild.id$', 'qty' => 1],
+                ['product_id' => '$secondChild.id$', 'qty' => 1],
+            ],
+        ], as: 'aggregate'),
+    ]
+    public function testParentStaysInStockWhileEveryChildIsInStock(): void
+    {
+        $parentId = (int)$this->fixtures->get('aggregate')->getId();
+
+        $this->changeParentStockStatus->execute([(int)$this->fixtures->get('firstChild')->getId()]);
+
+        $this->assertTrue(
+            (bool)$this->loadParentStockItem($parentId)->getIsInStock(),
+            'parent stays in stock when the second child, not only the first, is read as in stock'
+        );
+    }
+
+    #[
+        DbIsolation(true),
         DataFixture(ProductFixture::class, ['sku' => 'csp-shared-child'], as: 'child'),
         DataFixture(AggregateProductFixture::class, [
             'sku' => 'csp-parent-a',

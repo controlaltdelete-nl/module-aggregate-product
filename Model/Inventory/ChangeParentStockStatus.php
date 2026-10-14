@@ -84,6 +84,11 @@ class ChangeParentStockStatus
     }
 
     /**
+     * The ids are wrapped in an extra array on purpose. StockItemCriteria::setProductsFilter() stores
+     * an array as-is, and the criteria mapper spreads it into separate arguments of
+     * mapProductsFilter($products), which only reads the first. A bare list of ids therefore loads
+     * the stock item of the first product only, and every other product reads as missing.
+     *
      * @param int[] $productIds
      * @return array<int, StockItemInterface> productId => stock item
      */
@@ -95,7 +100,7 @@ class ChangeParentStockStatus
 
         $criteria = $this->criteriaInterfaceFactory->create();
         $criteria->setScopeFilter($this->stockConfiguration->getDefaultScopeId());
-        $criteria->setProductsFilter($productIds);
+        $criteria->setProductsFilter([$productIds]);
         $collection = $this->stockItemRepository->getList($criteria);
 
         $byProductId = [];
