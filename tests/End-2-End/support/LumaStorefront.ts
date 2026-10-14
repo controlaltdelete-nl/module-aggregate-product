@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 export interface GuestAddress {
     email: string;
@@ -21,6 +21,10 @@ export class LumaStorefront {
     async openProduct(url: string, name: string): Promise<void> {
         await this.page.goto(url, { waitUntil: 'networkidle' });
         await expect(this.page.locator('h1.page-title')).toHaveText(name);
+    }
+
+    stockAvailability(): Locator {
+        return this.page.locator('.product-info-main .stock');
     }
 
     async addToCart(qty: number): Promise<void> {

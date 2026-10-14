@@ -47,6 +47,40 @@ export class CatalogFixture {
     }
 
     /**
+     * Creates an aggregate through Magento, for tests where building it in the admin form is not
+     * what is under test. The children must exist and have their stock before the aggregate does.
+     */
+    createAggregateProduct(sku: string, name: string, price: number, children: ChildProduct[]): void {
+        const links = children.map((child) => ({ sku: child.sku, qty: child.linkQty }));
+        runMagentoPhp(`
+            $repository = $om->get(\\Magento\\Catalog\\Api\\ProductRepositoryInterface::class);
+            $product = $om->create(\\Magento\\Catalog\\Api\\Data\\ProductInterfaceFactory::class)->create();
+            $product->setTypeId(\\Nfourteen\\AggregateProduct\\Model\\Product\\Type\\Aggregate::TYPE_CODE)
+                ->setAttributeSetId(4)
+                ->setSku(${JSON.stringify(sku)})
+                ->setName(${JSON.stringify(name)})
+                ->setUrlKey(${JSON.stringify(sku)})
+                ->setPrice(${price})
+                ->setStatus(\\Magento\\Catalog\\Model\\Product\\Attribute\\Source\\Status::STATUS_ENABLED)
+                ->setVisibility(\\Magento\\Catalog\\Model\\Product\\Visibility::VISIBILITY_BOTH)
+                ->setWebsiteIds([1])
+                ->setStockData(['use_config_manage_stock' => 0, 'manage_stock' => 1, 'is_in_stock' => 1]);
+            $parentId = (int) $repository->save($product)->getId();
+            $links = array_map(
+                static fn (array $link) => $om->create(\\Nfourteen\\AggregateProduct\\Model\\RelationMetadataFactory::class)
+                    ->create()
+                    ->setData([
+                        'parent_id' => $parentId,
+                        'product_id' => (int) $repository->get($link['sku'])->getId(),
+                        'qty' => $link['qty'],
+                    ]),
+                json_decode(${JSON.stringify(JSON.stringify(links))}, true)
+            );
+            $om->get(\\Nfourteen\\AggregateProduct\\Model\\RelationMetadataReconciler::class)->reconcile($parentId, $links);
+        `);
+    }
+
+    /**
      * Does what the `indexer_update_all_views` cron job does. Stores with indexers on "Update by
      * Schedule" otherwise show a new product without a price or stock status until cron runs.
      */
