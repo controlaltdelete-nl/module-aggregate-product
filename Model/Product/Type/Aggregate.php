@@ -68,8 +68,8 @@ class Aggregate extends AbstractType implements ResetAfterRequestInterface
         private readonly RelationMetadataResource $relationMetadataResource,
         private readonly LinkedProductProviderInterface $linkedProductProvider,
         private readonly RelationReindexer $relationReindexer,
-        Json $serializer = null,
-        UploaderFactory $uploaderFactory = null
+        ?Json $serializer = null,
+        ?UploaderFactory $uploaderFactory = null
     ) {
         parent::__construct(
             $catalogProductOption,
