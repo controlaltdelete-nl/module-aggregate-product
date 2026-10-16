@@ -81,6 +81,7 @@ class AggregateModal extends AbstractModifier
         $listingConfig['arguments']['data']['config'] = [
             'autoRender' => false,
             'componentType' => 'insertListing',
+            'component' => 'Nfourteen_AggregateProduct/js/form/components/insert-listing',
             'dataScope' => 'aggregate_products_listing',
             'externalProvider' => 'aggregate_products_listing.aggregate_products_listing_data_source',
             'selectionsProvider' => 'aggregate_products_listing.aggregate_products_listing.product_columns.ids',

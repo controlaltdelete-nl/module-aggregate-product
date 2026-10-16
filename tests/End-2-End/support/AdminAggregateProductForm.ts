@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { openAdminDashboard } from './AdminDashboard';
+import { AdminProductPicker } from './AdminProductPicker';
 import type { ChildProduct } from './CatalogFixture';
 
 /**
@@ -8,12 +9,6 @@ import type { ChildProduct } from './CatalogFixture';
  * hand-built URL lands on the dashboard instead.
  */
 export class AdminAggregateProductForm {
-    /**
-     * The product picker loads every product in the catalog at once (it has no paging, search or
-     * filters), which takes a while on a catalog with sample data.
-     */
-    private static readonly PICKER_TIMEOUT = 90_000;
-
     constructor(private readonly page: Page) {}
 
     async openNew(): Promise<void> {
@@ -42,18 +37,16 @@ export class AdminAggregateProductForm {
     }
 
     async addChildren(children: ChildProduct[]): Promise<void> {
-        await this.page.getByRole('button', { name: 'Add Products to Aggregate' }).click();
-        const picker = this.page.locator('.product_form_product_form_aggregate_aggregate_products_modal');
+        const picker = this.productPicker();
+        await picker.open();
 
         for (const child of children) {
-            await picker
-                .locator('tbody tr', { hasText: child.sku })
-                .locator('input[type=checkbox]')
-                .check({ timeout: AdminAggregateProductForm.PICKER_TIMEOUT });
+            await picker.search(child.sku);
+            await expect(picker.rows()).toHaveCount(1);
+            await picker.select(child.sku);
         }
 
-        await picker.getByRole('button', { name: 'Add Selected Products' }).click();
-        await expect(picker).toBeHidden();
+        await picker.addSelected();
 
         for (const child of children) {
             await this.childRow(child.sku).locator('td[data-index="qty"] input').fill(child.linkQty.toString());
@@ -63,6 +56,10 @@ export class AdminAggregateProductForm {
     async save(): Promise<void> {
         await this.page.locator('#save-button').click();
         await expect(this.page.locator('.message-success')).toContainText('You saved the product.', { timeout: 60_000 });
+    }
+
+    productPicker(): AdminProductPicker {
+        return new AdminProductPicker(this.page);
     }
 
     childRow(sku: string): Locator {
